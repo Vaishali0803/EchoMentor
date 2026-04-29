@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EchoMentor | AI Speech & Presentation Practice</title>
+    <!-- Use Outfit font for a modern look -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+    <div class="app-container">
+        <div class="blob blob-1"></div>
+        <div class="blob blob-2"></div>
+        
+        <div class="auth-card">
+            <div class="auth-card-content">
+                <div class="brand">
+                    <div class="logo-icon-wrapper">
+                        <i data-lucide="mic" class="logo-icon"></i>
+                    </div>
+                    <h1>EchoMentor</h1>
+                </div>
+                
+                <div class="auth-header">
+                    <h2>Welcome Back</h2>
+                    <p>Sign in to continue your public speaking journey with AI feedback.</p>
+                </div>
+                
+                <form id="loginForm" class="auth-form">
+                    <div class="form-group">
+                        <label for="email">Email Address</label>
+                        <div class="input-container">
+                            <i data-lucide="mail" class="input-icon"></i>
+                            <input type="email" id="email" name="email" placeholder="test@example.com" value="test@example.com" required autocomplete="email">
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="password">Password</label>
+                        <div class="input-container">
+                            <i data-lucide="lock" class="input-icon"></i>
+                            <input type="password" id="password" name="password" placeholder="••••••••" value="password123" required autocomplete="current-password">
+                        </div>
+                        <div class="forgot-password">
+                            <a href="#">Forgot password?</a>
+                        </div>
+                    </div>
+                    
+                    <div id="errorMessage" class="error-message"></div>
+                    <div id="successMessage" class="success-message"></div>
+                    
+                    <button type="submit" class="submit-btn" id="submitBtn">
+                        <span class="btn-text">Sign In</span>
+                        <i data-lucide="arrow-right" class="btn-icon"></i>
+                    </button>
+                </form>
+                
+                <div class="auth-footer">
+                    <p>Don't have an account? <a href="signup.html" class="signup-link">Create Account</a></p>
+                </div>
+            </div>
+            
+            <div class="auth-visual">
+                <div class="visual-content">
+                    <div class="testimonial">
+                        <p class="quote">"The AI feedback from EchoMentor helped me conquer my stage fright and nail my startup pitch. It's like having a public speaking coach in your pocket."</p>
+                        <div class="author">
+                            <div class="author-avatar">
+                                <img src="https://ui-avatars.com/api/?name=Sarah+Jen&background=random" alt="Sarah J.">
+                            </div>
+                            <div class="author-info">
+                                <strong>Sarah J.</strong>
+                                <span>Startup Founder</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize Icons
+        lucide.createIcons();
+
+        const loginForm = document.getElementById('loginForm');
+        const errorMessage = document.getElementById('errorMessage');
+        const successMessage = document.getElementById('successMessage');
+        const submitBtn = document.getElementById('submitBtn');
+        const btnText = submitBtn.querySelector('.btn-text');
+        
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            // Clear previous messages
+            errorMessage.style.display = 'none';
+            successMessage.style.display = 'none';
+            errorMessage.textContent = '';
+            
+            // Set loading state
+            submitBtn.classList.add('loading');
+            btnText.textContent = 'Signing in...';
+            
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            
+            try {
+                const response = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ email, password })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    successMessage.textContent = 'Login successful! Redirecting to dashboard...';
+                    successMessage.style.display = 'block';
+                    
+                    // Here you would typically save the token
+                    localStorage.setItem('token', data.token);
+                    localStorage.setItem('user_name', data.name);
+                    
+                    // Redirect to dashboard
+                    setTimeout(() => {
+                        window.location.href = 'dashboard.html';
+                    }, 1500);
+                } else {
+                    errorMessage.textContent = data.message || 'Invalid credentials. Please try again.';
+                    errorMessage.style.display = 'block';
+                    submitBtn.classList.remove('loading');
+                    btnText.textContent = 'Sign In';
+                }
+            } catch (error) {
+                console.error('Login error:', error);
+                errorMessage.textContent = 'Network error. Please make sure the server is running.';
+                errorMessage.style.display = 'block';
+                submitBtn.classList.remove('loading');
+                btnText.textContent = 'Sign In';
+            }
+        });
+    </script>
+</body>
+</html>

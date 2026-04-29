@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard | EchoMentor</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="dashboard.css">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <!-- MediaPipe Vision Task for Face & Pose -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+</head>
+<body class="dashboard-body">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+        <div class="brand sidebar-brand">
+            <div class="logo-icon-wrapper">
+                <i data-lucide="mic" class="logo-icon"></i>
+            </div>
+            <h1>EchoMentor</h1>
+        </div>
+        
+        <nav class="sidebar-nav">
+            <a href="#" class="nav-item active" data-tab="record">
+                <i data-lucide="video"></i> Record Speech
+            </a>
+            <a href="#" class="nav-item" data-tab="upload">
+                <i data-lucide="upload"></i> Upload Video
+            </a>
+            <a href="#" class="nav-item" data-tab="history">
+                <i data-lucide="history"></i> History
+            </a>
+            <a href="#" class="nav-item" data-tab="suggestions">
+                <i data-lucide="lightbulb"></i> Suggestions
+            </a>
+        </nav>
+        
+        <div class="user-profile">
+            <div class="avatar">
+                <i data-lucide="user"></i>
+            </div>
+            <div class="user-info">
+                <strong id="userNameDisplay">User</strong>
+                <span>Free Plan</span>
+            </div>
+            <i data-lucide="log-out" class="logout-icon" id="logoutBtn"></i>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <!-- Record Tab -->
+        <section id="record-tab" class="tab-pane active">
+            <header class="tab-header">
+                <h2>Practice Session</h2>
+                <p>Record your speech to receive real-time MediaPipe pose analysis and AI Whisper/GPT feedback.</p>
+            </header>
+            
+            <div class="studio-container">
+                <div class="video-section">
+                    <div class="video-wrapper">
+                        <video id="inputVideo" class="input-video" autoplay playsinline muted></video>
+                        <canvas id="outputCanvas" class="output-canvas"></canvas>
+                        
+                        <div class="realtime-metrics">
+                            <div class="metric-badge" id="postureStatus">
+                                <i data-lucide="activity"></i> Posture: Analyzing
+                            </div>
+                            <div class="metric-badge" id="eyeContactStatus">
+                                <i data-lucide="eye"></i> Eye Contact: Analyzing
+                            </div>
+                        </div>
+                        <div id="liveTranscript" style="position:absolute; bottom:20px; left:50%; transform:translateX(-50%); width:80%; text-align:center; background:rgba(0,0,0,0.7); color:white; padding:10px 15px; border-radius:8px; display:none; z-index:10; font-size:1rem; min-height:44px; backdrop-filter: blur(5px); border:1px solid rgba(255,255,255,0.2);">
+                        </div>
+                    </div>
+                    
+                    <div class="controls-bar" style="display:flex; align-items:center; gap:1.5rem;">
+                        <button id="startCameraBtn" class="btn btn-secondary">
+                            <i data-lucide="camera"></i> Start Camera
+                        </button>
+                        <button id="recordBtn" class="btn btn-primary" disabled>
+                            <i data-lucide="circle" class="record-dot"></i> Start Recording
+                        </button>
+                        <div id="recordingTimer" style="display:none; align-items:center; gap:0.5rem; color:var(--error); font-weight:700; font-size:1.1rem; animation: pulse 2s infinite;">
+                            <i data-lucide="clock" style="width:18px;height:18px;"></i> <span>00:00</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="feedback-section">
+                    <div class="feedback-card">
+                        <h3>AI Live Teleprompter / Notes</h3>
+                        <textarea class="notes-area" placeholder="Type your speech notes here..."></textarea>
+                    </div>
+                    
+                    <div class="feedback-card ai-analysis">
+                        <h3>Session Analysis (Mock GPT/Whisper)</h3>
+                        <div id="analysisResults" class="analysis-results">
+                            <div class="empty-state">
+                                <i data-lucide="bar-chart-2"></i>
+                                <p>Record a session to see your AI feedback on pacing, tone, and grammar here.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Upload Tab -->
+        <section id="upload-tab" class="tab-pane">
+            <header class="tab-header">
+                <h2>Upload Recording</h2>
+                <p>Upload a previous video/audio file for OpenAI Whisper and OpenCV processing.</p>
+            </header>
+            <div class="upload-area" id="dropZone">
+                <i data-lucide="upload-cloud" class="upload-icon"></i>
+                <h3>Drag & Drop your media file</h3>
+                <p>or click to browse (MP4, MP3, WAV)</p>
+                <input type="file" id="fileInput" accept="video/mp4, audio/mp3, audio/wav" hidden>
+                <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()">Select File</button>
+            </div>
+        </section>
+        
+        <!-- History & Suggestions (Placeholders) -->
+        <section id="history-tab" class="tab-pane">
+            <header class="tab-header">
+                <h2>History</h2>
+                <p>Review past recordings and AI feedback reports.</p>
+            </header>
+            <div class="history-grid" id="historyGrid">
+                <div class="empty-state">
+                    <i data-lucide="inbox"></i>
+                    <p>No recordings yet. Your real practice sessions will appear here.</p>
+                </div>
+            </div>
+        </section>
+        
+        <section id="suggestions-tab" class="tab-pane">
+            <header class="tab-header">
+                <h2>AI Suggestions</h2>
+                <p>Personalized exercises generated based on your weaknesses.</p>
+            </header>
+            <div class="suggestions-list" id="suggestionsList">
+                <div class="empty-state">
+                    <i data-lucide="inbox"></i>
+                    <p>Record a session first to get real AI suggestions based on your speech.</p>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <script src="dashboard.js"></script>
+</body>
+</html>
