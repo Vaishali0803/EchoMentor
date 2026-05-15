@@ -116,14 +116,60 @@
         <section id="upload-tab" class="tab-pane">
             <header class="tab-header">
                 <h2>Upload Recording</h2>
-                <p>Upload a previous video/audio file for OpenAI Whisper and OpenCV processing.</p>
+                <p>Upload a previous video file for MediaPipe pose analysis and AI feedback.</p>
             </header>
-            <div class="upload-area" id="dropZone">
-                <i data-lucide="upload-cloud" class="upload-icon"></i>
-                <h3>Drag & Drop your media file</h3>
-                <p>or click to browse (MP4, MP3, WAV)</p>
-                <input type="file" id="fileInput" accept="video/mp4, audio/mp3, audio/wav" hidden>
-                <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()">Select File</button>
+            
+            <div id="uploadContainer">
+                <div class="upload-area" id="dropZone">
+                    <i data-lucide="upload-cloud" class="upload-icon"></i>
+                    <h3>Drag & Drop your video file</h3>
+                    <p>or click to browse (MP4, WebM)</p>
+                    <input type="file" id="fileInput" accept="video/mp4, video/webm, video/ogg" hidden>
+                    <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()">Select File</button>
+                </div>
+            </div>
+
+            <div id="uploadAnalysisContainer" style="display:none; margin-top: 2rem;">
+                <div class="studio-container">
+                    <div class="video-section">
+                        <div class="video-wrapper">
+                            <video id="uploadedVideo" class="input-video" playsinline controls></video>
+                            <canvas id="uploadedCanvas" class="output-canvas" style="pointer-events: none;"></canvas>
+                            
+                            <div class="realtime-metrics">
+                                <div class="metric-badge" id="uploadPostureStatus">
+                                    <i data-lucide="activity"></i> Posture: Waiting
+                                </div>
+                                <div class="metric-badge" id="uploadEyeContactStatus">
+                                    <i data-lucide="eye"></i> Eye Contact: Waiting
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="controls-bar" style="display:flex; align-items:center; gap:1.5rem; justify-content: center;">
+                            <button id="analyzeUploadedBtn" class="btn btn-primary">
+                                <i data-lucide="play"></i> Analyze Video
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="feedback-section">
+                        <div class="feedback-card">
+                            <h3>Auto-Generated Transcript</h3>
+                            <textarea id="uploadScriptArea" class="notes-area" readonly placeholder="Transcript will appear here automatically as the video plays... (Note: uses system microphone, so ensure video audio is audible)"></textarea>
+                        </div>
+                        
+                        <div class="feedback-card ai-analysis">
+                            <h3>Upload Analysis</h3>
+                            <div id="uploadAnalysisResults" class="analysis-results">
+                                <div class="empty-state">
+                                    <i data-lucide="bar-chart-2"></i>
+                                    <p>Upload a video and click analyze to see feedback on your speech and posture.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </section>
         

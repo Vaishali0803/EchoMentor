@@ -48,10 +48,15 @@ let recordedChunks = [];
 let recordingStartTime = 0;
 let timerInterval = null;
 
+// Tracking for Human Detection
+let totalFramesAnalyzed = 0;
+let humanDetectedFrames = 0;
+
 // Speech Recognition Setup
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 let recognition = null;
 let currentTranscript = "";
+let uploadTranscript = "";
 
 if (SpeechRecognition) {
     recognition = new SpeechRecognition();
@@ -72,15 +77,19 @@ if (SpeechRecognition) {
             }
         }
         if (finalTranscriptPiece) {
-            currentTranscript += finalTranscriptPiece + " ";
+            if (isRecording) {
+                currentTranscript += finalTranscriptPiece + " ";
+            }
         }
         window.currentInterim = interimTranscript;
         
         // Update live transcript
-        const liveEl = document.getElementById('liveTranscript');
         if (isRecording) {
-            liveEl.style.display = 'block';
-            liveEl.textContent = (currentTranscript + " " + interimTranscript).trim();
+            const liveEl = document.getElementById('liveTranscript');
+            if (liveEl) {
+                liveEl.style.display = 'block';
+                liveEl.textContent = (currentTranscript + " " + interimTranscript).trim();
+            }
         }
     };
     
@@ -116,28 +125,36 @@ pose.setOptions({
 });
 
 pose.onResults((results) => {
-    canvasCtx.save();
-    canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+    const isUploadTab = document.getElementById('upload-tab').classList.contains('active');
+    const ctx = isUploadTab ? (document.getElementById('uploadedCanvas') ? document.getElementById('uploadedCanvas').getContext('2d') : null) : canvasCtx;
+    const canvasEl = isUploadTab ? document.getElementById('uploadedCanvas') : canvasElement;
+    const pStatus = isUploadTab ? document.getElementById('uploadPostureStatus') : postureStatus;
+    
+    if (!ctx || !canvasEl || !pStatus) return;
+
+    ctx.save();
+    ctx.clearRect(0, 0, canvasEl.width, canvasEl.height);
     
     // Draw the video frame to canvas (NO DOTS/LINES AS REQUESTED)
-    canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+    ctx.drawImage(results.image, 0, 0, canvasEl.width, canvasEl.height);
     
     if (results.poseLandmarks) {
+        humanDetectedFrames++;
         // Real Posture Analysis Logic
         const shoulders = [results.poseLandmarks[11], results.poseLandmarks[12]];
         if (shoulders[0] && shoulders[1]) {
             const dy = Math.abs(shoulders[0].y - shoulders[1].y);
             if (dy > 0.05) {
-                postureStatus.className = 'metric-badge warning';
-                postureStatus.innerHTML = '<i data-lucide="alert-circle"></i> Posture: Slouching/Tilted';
+                pStatus.className = 'metric-badge warning';
+                pStatus.innerHTML = '<i data-lucide="alert-circle"></i> Posture: Slouching/Tilted';
             } else {
-                postureStatus.className = 'metric-badge good';
-                postureStatus.innerHTML = '<i data-lucide="check-circle"></i> Posture: Good';
+                pStatus.className = 'metric-badge good';
+                pStatus.innerHTML = '<i data-lucide="check-circle"></i> Posture: Good';
             }
             lucide.createIcons();
         }
     }
-    canvasCtx.restore();
+    ctx.restore();
 });
 
 // Initialize MediaPipe Face Mesh
@@ -153,12 +170,18 @@ faceMesh.setOptions({
 });
 
 faceMesh.onResults((results) => {
+    const isUploadTab = document.getElementById('upload-tab').classList.contains('active');
+    const eStatus = isUploadTab ? document.getElementById('uploadEyeContactStatus') : eyeContactStatus;
+    
+    if (!eStatus) return;
+
     if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
-        eyeContactStatus.className = 'metric-badge good';
-        eyeContactStatus.innerHTML = '<i data-lucide="eye"></i> Eye Contact: Detected';
+        humanDetectedFrames++;
+        eStatus.className = 'metric-badge good';
+        eStatus.innerHTML = '<i data-lucide="eye"></i> Eye Contact: Detected';
     } else {
-        eyeContactStatus.className = 'metric-badge warning';
-        eyeContactStatus.innerHTML = '<i data-lucide="eye-off"></i> Eye Contact: Looking Away';
+        eStatus.className = 'metric-badge warning';
+        eStatus.innerHTML = '<i data-lucide="eye-off"></i> Eye Contact: Looking Away';
     }
     lucide.createIcons();
 });
@@ -180,6 +203,7 @@ startCameraBtn.addEventListener('click', async () => {
             
             camera = new Camera(videoElement, {
                 onFrame: async () => {
+                    totalFramesAnalyzed++;
                     await pose.send({image: videoElement});
                     await faceMesh.send({image: videoElement});
                 },
@@ -213,6 +237,8 @@ recordBtn.addEventListener('click', () => {
         currentTranscript = "";
         window.currentInterim = "";
         recordingStartTime = Date.now();
+        totalFramesAnalyzed = 0;
+        humanDetectedFrames = 0;
         
         // Start Timer
         const timerEl = document.getElementById('recordingTimer');
@@ -273,6 +299,17 @@ function processRecording() {
     
     // Allow brief time for final speech results to arrive
     setTimeout(() => {
+        if (totalFramesAnalyzed > 0 && humanDetectedFrames === 0) {
+            analysisResults.innerHTML = `
+                <div class="empty-state">
+                    <i data-lucide="alert-triangle" style="color:var(--error); width:48px; height:48px;"></i>
+                    <p style="color:var(--error)">Analysis Failed: No human subject was detected during recording. Please ensure you are visible in the camera.</p>
+                </div>
+            `;
+            lucide.createIcons();
+            return;
+        }
+
         // Combine final text and any pending interim text
         const finalTextToProcess = (currentTranscript + " " + (window.currentInterim || "")).trim();
         const text = finalTextToProcess || "[No speech detected during this session]";
@@ -448,12 +485,24 @@ function renderSuggestions(wpm, fillerCount) {
     lucide.createIcons();
 }
 
-// Upload Area Drag & Drop
+// Upload Area Drag & Drop Logic
 const dropZone = document.getElementById('dropZone');
 const fileInput = document.getElementById('fileInput');
+const uploadContainer = document.getElementById('uploadContainer');
+const uploadAnalysisContainer = document.getElementById('uploadAnalysisContainer');
+const uploadedVideo = document.getElementById('uploadedVideo');
+const uploadedCanvas = document.getElementById('uploadedCanvas');
+const analyzeUploadedBtn = document.getElementById('analyzeUploadedBtn');
+const uploadAnalysisResults = document.getElementById('uploadAnalysisResults');
+const uploadScriptArea = document.getElementById('uploadScriptArea');
+
+let uploadAnimationId;
+let isAnalyzingUpload = false;
+let uploadAnalysisTimer = null;
+let uploadedVideoDuration = 0;
 
 ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-    dropZone.addEventListener(eventName, preventDefaults, false);
+    if (dropZone) dropZone.addEventListener(eventName, preventDefaults, false);
 });
 
 function preventDefaults(e) {
@@ -461,8 +510,8 @@ function preventDefaults(e) {
     e.stopPropagation();
 }
 
-dropZone.addEventListener('drop', handleDrop, false);
-fileInput.addEventListener('change', (e) => {
+if (dropZone) dropZone.addEventListener('drop', handleDrop, false);
+if (fileInput) fileInput.addEventListener('change', (e) => {
     if (e.target.files.length) handleFiles(e.target.files);
 });
 
@@ -474,10 +523,285 @@ function handleDrop(e) {
 
 function handleFiles(files) {
     const file = files[0];
-    dropZone.innerHTML = `
-        <i data-lucide="check-circle" class="upload-icon" style="color:var(--success)"></i>
-        <h3>${file.name} uploaded</h3>
-        <p>File received. Real processing would happen here.</p>
+    if (file && file.type.startsWith('video/')) {
+        const fileURL = URL.createObjectURL(file);
+        uploadedVideo.src = fileURL;
+        
+        uploadedVideo.onloadedmetadata = () => {
+            uploadedCanvas.width = uploadedVideo.videoWidth;
+            uploadedCanvas.height = uploadedVideo.videoHeight;
+        };
+
+        uploadContainer.style.display = 'none';
+        uploadAnalysisContainer.style.display = 'block';
+        
+        uploadAnalysisResults.innerHTML = `
+            <div class="empty-state">
+                <i data-lucide="check-circle" style="color:var(--success)"></i>
+                <p>Video loaded. Paste the script if available and click Analyze Video.</p>
+            </div>
+        `;
+        lucide.createIcons();
+    } else {
+        alert("Please upload a valid video file (MP4, WebM, OGG).");
+    }
+}
+
+async function processUploadFrame() {
+    if (!uploadedVideo.paused && !uploadedVideo.ended && isAnalyzingUpload) {
+        const ctx = uploadedCanvas.getContext('2d');
+        ctx.drawImage(uploadedVideo, 0, 0, uploadedCanvas.width, uploadedCanvas.height);
+        
+        try {
+            totalFramesAnalyzed++;
+            await pose.send({image: uploadedCanvas});
+            await faceMesh.send({image: uploadedCanvas});
+        } catch(e) {
+            console.error(e);
+        }
+        
+        uploadAnimationId = requestAnimationFrame(processUploadFrame);
+    }
+}
+
+let transcriber = null;
+let isWhisperDone = false;
+
+async function transcribeVideoAudio(blobUrl) {
+    try {
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+        const response = await fetch(blobUrl);
+        const arrayBuffer = await response.arrayBuffer();
+        const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+        const audioData = audioBuffer.getChannelData(0);
+        
+        if (!transcriber) {
+            const transformers = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.16.1');
+            transformers.env.allowLocalModels = false;
+            
+            // Enable Multi-Threading for massive speed boost!
+            if (navigator.hardwareConcurrency) {
+                transformers.env.backends.onnx.wasm.numThreads = Math.min(navigator.hardwareConcurrency, 8);
+            }
+            
+            const scriptArea = document.getElementById('uploadScriptArea');
+            transcriber = await transformers.pipeline('automatic-speech-recognition', 'Xenova/whisper-base.en', {
+                progress_callback: (info) => {
+                    if (info.status === 'progress' && scriptArea) {
+                        scriptArea.value = `Downloading AI Model: ${Math.round(info.progress)}%... (First time only! Will be instant next time.)`;
+                    } else if (info.status === 'ready' && scriptArea) {
+                        scriptArea.value = `AI Model loaded! Transcribing audio...`;
+                    }
+                }
+            });
+        }
+        
+        const output = await transcriber(audioData, {
+            chunk_length_s: 30,
+            stride_length_s: 5
+        });
+        
+        return output.text.trim();
+    } catch (err) {
+        console.error("Whisper Error:", err);
+        throw err;
+    }
+}
+
+if (analyzeUploadedBtn) {
+    analyzeUploadedBtn.addEventListener('click', () => {
+        if (!isAnalyzingUpload) {
+            isAnalyzingUpload = true;
+            uploadedVideo.play();
+            totalFramesAnalyzed = 0;
+            humanDetectedFrames = 0;
+            uploadTranscript = "";
+            isWhisperDone = false;
+            
+            if (uploadScriptArea) uploadScriptArea.value = "AI is downloading Whisper model and analyzing audio directly from the file... Please wait.";
+            
+            analyzeUploadedBtn.innerHTML = '<i data-lucide="square" class="record-dot"></i> Stop Analysis';
+            analyzeUploadedBtn.classList.remove('btn-primary');
+            analyzeUploadedBtn.classList.add('btn-danger');
+            
+            uploadAnalysisResults.innerHTML = `
+                <div class="empty-state">
+                    <i data-lucide="loader" style="animation: spin 2s linear infinite;"></i>
+                    <p>Analyzing video posture, eye contact, and running Whisper AI transcript...</p>
+                </div>
+            `;
+            lucide.createIcons();
+            processUploadFrame();
+            
+            uploadedVideoDuration = 0;
+            uploadAnalysisTimer = setInterval(() => {
+                if(!uploadedVideo.paused) uploadedVideoDuration += 1;
+            }, 1000);
+            
+            // Start Whisper Transcription
+            transcribeVideoAudio(uploadedVideo.src).then(text => {
+                uploadTranscript = text;
+                isWhisperDone = true;
+                if (uploadScriptArea) uploadScriptArea.value = text;
+                
+                // If video already ended, finish analysis now
+                if (!isAnalyzingUpload) {
+                    finishUploadAnalysis();
+                }
+            }).catch(err => {
+                console.error(err);
+                uploadTranscript = "";
+                isWhisperDone = true;
+                if (uploadScriptArea) uploadScriptArea.value = "Transcription failed: " + err.message;
+                
+                if (!isAnalyzingUpload) {
+                    finishUploadAnalysis();
+                }
+            });
+            
+        } else {
+            stopUploadAnalysis();
+        }
+    });
+}
+
+if (uploadedVideo) {
+    uploadedVideo.addEventListener('ended', () => {
+        if (isAnalyzingUpload) {
+            stopUploadAnalysis();
+        }
+    });
+}
+
+function stopUploadAnalysis() {
+    isAnalyzingUpload = false;
+    uploadedVideo.pause();
+    cancelAnimationFrame(uploadAnimationId);
+    clearInterval(uploadAnalysisTimer);
+    
+    if(analyzeUploadedBtn) {
+        analyzeUploadedBtn.innerHTML = '<i data-lucide="play"></i> Analyze Video';
+        analyzeUploadedBtn.classList.remove('btn-danger');
+        analyzeUploadedBtn.classList.add('btn-primary');
+        lucide.createIcons();
+    }
+    
+    if (isWhisperDone) {
+        finishUploadAnalysis();
+    } else {
+        uploadAnalysisResults.innerHTML = `
+            <div class="empty-state">
+                <i data-lucide="loader" style="animation: spin 2s linear infinite;"></i>
+                <p>Waiting for Whisper AI transcript to finish generating...</p>
+            </div>
+        `;
+        lucide.createIcons();
+    }
+}
+
+function finishUploadAnalysis() {
+    uploadAnalysisResults.innerHTML = `
+        <div class="empty-state">
+            <i data-lucide="loader" style="animation: spin 2s linear infinite;"></i>
+            <p>Processing feedback...</p>
+        </div>
     `;
     lucide.createIcons();
+    
+    setTimeout(() => {
+        if (totalFramesAnalyzed > 0 && humanDetectedFrames === 0) {
+            uploadAnalysisResults.innerHTML = `
+                <div class="empty-state">
+                    <i data-lucide="alert-triangle" style="color:var(--error); width:48px; height:48px;"></i>
+                    <p style="color:var(--error)">Analysis Failed: No human subject was detected in the video.</p>
+                </div>
+            `;
+            lucide.createIcons();
+            return;
+        }
+
+        // Default to ~5 seconds if duration is extremely short
+        const durationMin = Math.max(uploadedVideoDuration / 60, 0.08); 
+        
+        const scriptText = uploadTranscript.trim();
+        
+        if (!scriptText || scriptText.length === 0) {
+            uploadAnalysisResults.innerHTML = `
+                <div class="empty-state">
+                    <i data-lucide="file-text" style="color:var(--error); width:48px; height:48px;"></i>
+                    <p style="color:var(--error)">Analysis Failed: No speech was detected in the video by the AI. Please ensure the video has clear audio of a person speaking.</p>
+                </div>
+            `;
+            lucide.createIcons();
+            return;
+        }
+
+        const text = scriptText;
+        let wordCount = 0;
+        let wpm = 0;
+        let fillerCount = 0;
+        let score = 100;
+        let pacingFeedback = "";
+        let fillerFeedback = "";
+
+        const words = text.split(/\s+/).filter(w => w.length > 0);
+        wordCount = words.length;
+        wpm = Math.round(wordCount / durationMin);
+        
+        const fillers = ["um", "uh", "ah", "like", "so", "basically", "actually", "literally"];
+        words.forEach(w => {
+            if (fillers.includes(w.toLowerCase().replace(/[^a-z]/g, ''))) fillerCount++;
+        });
+
+        if (wpm < 120) {
+            const penalty = Math.min(30, Math.round((120 - wpm) * 0.4));
+            score -= penalty;
+            pacingFeedback = `A bit slow. Try to pick up the pace slightly for better engagement.`;
+        } else if (wpm > 160) {
+            const penalty = Math.min(30, Math.round((wpm - 160) * 0.4));
+            score -= penalty;
+            pacingFeedback = `A bit fast. Try taking breaths between sentences to slow down.`;
+        } else {
+            pacingFeedback = `Excellent pacing! You are in the optimal range.`;
+        }
+
+        const fillerDensity = fillerCount / durationMin;
+        if (fillerDensity > 1) {
+            const fPenalty = Math.min(35, Math.round(fillerDensity * 1.5));
+            score -= fPenalty;
+        }
+        
+        if (durationMin < 0.15) score -= 12;
+        score = Math.max(18, Math.min(100, score));
+        
+        fillerFeedback = `Detected ${fillerCount} filler words. ${fillerCount > 2 ? 'Try to use pauses instead.' : 'Great job minimizing fillers!'}`;
+
+        const feedbackHTML = `
+            <div style="display:flex; flex-direction:column; gap:1rem; animation: fadeIn 0.5s;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <h4 style="color:var(--text-main);">Analysis Score</h4>
+                    <span class="score-pill">${score} / 100</span>
+                </div>
+                
+                <div style="background:rgba(255,255,255,0.05); padding:1rem; border-radius:8px;">
+                    <strong style="color:var(--text-main); display:block; margin-bottom:0.5rem;">Analyzed Script:</strong>
+                    <p style="font-size:0.9rem; color:var(--text-secondary); font-style:italic;">"${text}"</p>
+                </div>
+                
+                <div>
+                    <strong style="color:var(--primary); display:block; margin-bottom:0.5rem;">AI Feedback:</strong>
+                    <ul style="padding-left:1.5rem; font-size:0.9rem; color:var(--text-secondary); line-height:1.6;">
+                        <li><strong>Pacing:</strong> ${wpm} WPM. ${pacingFeedback}</li>
+                        <li><strong>Filler Words:</strong> ${fillerFeedback}</li>
+                        <li><strong>Word Count:</strong> You spoke ${wordCount} words based on the script.</li>
+                    </ul>
+                </div>
+            </div>
+        `;
+        
+        uploadAnalysisResults.innerHTML = feedbackHTML;
+        lucide.createIcons();
+
+        saveToHistory(score, text, wpm, fillerCount);
+    }, 1500);
 }

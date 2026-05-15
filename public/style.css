@@ -383,7 +383,32 @@ body {
 }
 
 @media (max-width: 768px) {
+    .app-container {
+        padding: 1rem;
+    }
+
     .auth-card-content {
         padding: 2rem;
+    }
+    
+    .auth-header h2 {
+        font-size: 1.5rem;
+    }
+    
+    .brand {
+        margin-bottom: 2rem;
+    }
+    
+    .testimonial {
+        padding: 1.5rem;
+    }
+    
+    .testimonial::before {
+        font-size: 3rem;
+        left: 1rem;
+    }
+    
+    .quote {
+        font-size: 1rem;
     }
 }
